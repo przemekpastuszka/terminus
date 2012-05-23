@@ -9,6 +9,7 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.yarn.api.ClientRMProtocol;
 import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationRequest;
 import org.apache.hadoop.yarn.api.protocolrecords.GetNewApplicationResponse;
+import org.apache.hadoop.yarn.api.protocolrecords.SubmitApplicationRequest;
 import org.apache.hadoop.yarn.api.records.ApplicationSubmissionContext;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
@@ -58,5 +59,15 @@ public class YarnClientApplication {
     applicationsManager = ((ClientRMProtocol) rpc.getProxy(
         ClientRMProtocol.class, rmAddress, appsManagerServerConf));
     LOG.info("Connected to application manager");
+  }
+
+  public void submitJob(ContainerContext container) throws YarnRemoteException {
+    appContext.setAMContainerSpec(container.getContainerContext());
+
+    SubmitApplicationRequest appRequest =
+        Records.newRecord(SubmitApplicationRequest.class);
+    appRequest.setApplicationSubmissionContext(appContext);
+
+    applicationsManager.submitApplication(appRequest);
   }
 }
