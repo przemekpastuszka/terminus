@@ -1,5 +1,7 @@
 package pl.wroc.uni.ii.pastuszka.yarn.test;
 
+import static org.apache.hadoop.yarn.api.ApplicationConstants.LOG_DIR_EXPANSION_VAR;
+
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
 
@@ -13,8 +15,11 @@ public class Test {
     YarnClientApplication client = new YarnClientApplication("test_me_yarn");
 
     ContainerContext context = new ContainerContext();
-    context.addCommand("/usr/bin/echo test");
-    context.addResource(LocalResourceDescription.createFromPath("hej", new Path("/home/rtshadow/tmp")));
+    context.addResource(LocalResourceDescription.createFromPath("spike.jar", new Path("/home/rtshadow/workspace/yarn_spike/spike.jar")));
+    context.addCommand("/opt/java/bin/java" +
+        " pl.wroc.uni.ii.pastuszka.yarn.appmanager.ApplicationManager" +
+        " 1>" + LOG_DIR_EXPANSION_VAR + "/stdout" +
+        " 2>" + LOG_DIR_EXPANSION_VAR + "/stderr");
     context.setMemoryConstraint(10000);
 
     client.submitJob(context);
