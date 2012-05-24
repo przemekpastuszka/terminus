@@ -21,7 +21,7 @@ public class ContainerContext {
 
   private void setupClasspath() {
     Map<String, String> env = new HashMap<String, String>();
-    String classPathEnv = "$CLASSPATH:./*:";
+    String classPathEnv = "<CLASSPATH>:./*:";
     env.put("CLASSPATH", classPathEnv);
     amContainer.setEnvironment(env);
   }

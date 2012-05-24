@@ -30,7 +30,7 @@ public class LocalResourceDescription {
 
       amJarRsrc.setType(LocalResourceType.FILE);
       amJarRsrc.setVisibility(LocalResourceVisibility.APPLICATION);
-      amJarRsrc.setResource(ConverterUtils.getYarnUrlFromPath(path));
+      amJarRsrc.setResource(ConverterUtils.getYarnUrlFromPath(jarStatus.getPath()));
       amJarRsrc.setTimestamp(jarStatus.getModificationTime());
       amJarRsrc.setSize(jarStatus.getLen());
 
