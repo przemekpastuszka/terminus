@@ -1,10 +1,12 @@
 package pl.wroc.uni.ii.pastuszka.yarn.appmanager;
 
+import static java.lang.String.format;
 import static org.apache.hadoop.yarn.api.records.FinalApplicationStatus.SUCCEEDED;
 
-import java.util.LinkedList;
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.yarn.api.records.ContainerStatus;
 import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
 
 import pl.wroc.uni.ii.pastuszka.yarn.common.LocalResourceDescription;
@@ -12,23 +14,23 @@ import pl.wroc.uni.ii.pastuszka.yarn.container.AllocatedContainer;
 import pl.wroc.uni.ii.pastuszka.yarn.container.ContainerTest;
 
 public class ApplicationManagerTest {
+  private static final Log LOG = LogFactory.getLog(ApplicationManagerTest.class);
+  private static final int TIMEOUT = 7000;
 
   public static void main(String[] args) throws YarnRemoteException, InterruptedException {
     ApplicationManager appManager = new ApplicationManager();
-    appManager.register();
+    try {
+      AllocatedContainer container = appManager.allocateContainers(1, TIMEOUT).get(0);
+      container.addResource(LocalResourceDescription.createFromPath("spike.jar", new Path("/tmp/spike.jar")));
+      container.addCommand("/opt/java/bin/java -cp spike.jar" +
+          " " + ContainerTest.class.getCanonicalName());
+      container.launch();
 
-    AllocatedContainer container = getOneContainer(appManager);
-    container.addResource(LocalResourceDescription.createFromPath("spike.jar", new Path("/tmp/spike.jar")));
-    container.addCommand("/opt/java/bin/java -cp spike.jar" +
-        " " + ContainerTest.class.getCanonicalName());
-    container.launch();
+      ContainerStatus status = appManager.waitFor(container);
+      LOG.info(format("Container finished with %d exit code and %s status", status.getExitStatus(), status.getDiagnostics()));
 
-    appManager.unregister(SUCCEEDED);
+    } finally {
+      appManager.unregister(SUCCEEDED);
+    }
   }
-
-  protected static AllocatedContainer getOneContainer(ApplicationManager appManager) throws YarnRemoteException, InterruptedException {
-    AllocatedContainer container = new LinkedList<AllocatedContainer>(appManager.allocateContainers(1)).get(0);
-    return container;
-  }
-
 }

@@ -10,10 +10,10 @@ import static org.apache.hadoop.yarn.conf.YarnConfiguration.RM_SCHEDULER_ADDRESS
 import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnCommon.getMemoryResource;
 import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnSettings.CONTAINER_MEMORY;
 
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -27,6 +27,7 @@ import org.apache.hadoop.yarn.api.records.AMResponse;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.api.records.Container;
 import org.apache.hadoop.yarn.api.records.ContainerId;
+import org.apache.hadoop.yarn.api.records.ContainerStatus;
 import org.apache.hadoop.yarn.api.records.FinalApplicationStatus;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
@@ -39,37 +40,72 @@ import pl.wroc.uni.ii.pastuszka.yarn.container.AllocatedContainer;
 
 public class ApplicationManager {
   private static final int SLEEP_TIME = 1000;
-  private static final int TIMEOUT = 7000;
 
   private static final Log LOG = LogFactory.getLog(ApplicationManager.class);
 
   private int responseId = 0;
   private AMRMProtocol resourceManager;
   private ApplicationAttemptId appAttemptID;
+  private Map<ContainerId, ContainerStatus> finishedContainersStatuses = new HashMap<ContainerId, ContainerStatus>();
 
-  public ApplicationManager() {
+  private boolean applicationAlive = true;
+  private List<ResourceRequest> resourceRequest = null;
+  private List<AllocatedContainer> containers = new LinkedList<AllocatedContainer>();
+
+  public ApplicationManager() throws YarnRemoteException {
     resourceManager = (AMRMProtocol) YarnCommon.get().connectToUsingConf(RM_SCHEDULER_ADDRESS, DEFAULT_RM_SCHEDULER_ADDRESS,
         AMRMProtocol.class);
+    register();
+
+    MainThread mainThread = new MainThread();
+    mainThread.start();
   }
 
-  public Set<AllocatedContainer> allocateContainers(int numContainers) throws YarnRemoteException,
+  private class MainThread extends Thread {
+    @Override
+    public void run() {
+      try {
+        while (applicationAlive) {
+          if (resourceRequest != null) {
+            sendResourceRequest();
+          }
+          else {
+            containers.addAll(allocateResources(EMPTY_LIST));
+          }
+
+          Thread.sleep(SLEEP_TIME);
+        }
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+    }
+
+  }
+
+  private synchronized void sendResourceRequest() throws YarnRemoteException {
+    containers.addAll(allocateResources(resourceRequest));
+    resourceRequest = null;
+  }
+
+  public List<AllocatedContainer> allocateContainers(int numContainers, int timeout) throws YarnRemoteException,
       InterruptedException {
     long startTime = currentTimeMillis();
+    createResourceRequest(numContainers);
 
-    Set<AllocatedContainer> containers = allocateResources(createResourceRequest(numContainers));
     while (containers.size() != numContainers) {
-      if (currentTimeMillis() - startTime > TIMEOUT) {
+      if (currentTimeMillis() - startTime > timeout) {
         LOG.warn(format("Allocated only %s containers, but wanted %s", containers.size(), numContainers));
         break;
       }
-
-      containers.addAll(allocateResources(EMPTY_LIST));
       Thread.sleep(SLEEP_TIME);
     }
+
     return containers;
   }
 
-  protected List<ResourceRequest> createResourceRequest(int numContainers) {
+  protected synchronized void createResourceRequest(int numContainers) {
+    containers = new LinkedList<AllocatedContainer>();
+
     ResourceRequest rsrcRequest = Records.newRecord(ResourceRequest.class);
     rsrcRequest.setHostName("*");
     Priority pri = Records.newRecord(Priority.class);
@@ -77,11 +113,10 @@ public class ApplicationManager {
     rsrcRequest.setPriority(pri);
     rsrcRequest.setCapability(getMemoryResource(CONTAINER_MEMORY));
     rsrcRequest.setNumContainers(numContainers);
-    List<ResourceRequest> resourceRequests = asList(rsrcRequest);
-    return resourceRequests;
+    resourceRequest = asList(rsrcRequest);
   }
 
-  protected Set<AllocatedContainer> allocateResources(List<ResourceRequest> resourceRequests) throws YarnRemoteException {
+  protected List<AllocatedContainer> allocateResources(List<ResourceRequest> resourceRequests) throws YarnRemoteException {
     AllocateRequest req = Records.newRecord(AllocateRequest.class);
     req.setResponseId(responseId++);
     req.setApplicationAttemptId(appAttemptID);
@@ -90,8 +125,9 @@ public class ApplicationManager {
 
     AllocateResponse allocateResponse = resourceManager.allocate(req);
     AMResponse amResp = allocateResponse.getAMResponse();
+    addCompletedContainers(amResp.getCompletedContainersStatuses());
 
-    Set<AllocatedContainer> containers = new HashSet<AllocatedContainer>();
+    List<AllocatedContainer> containers = new LinkedList<AllocatedContainer>();
     for (Container allocatedContainer : amResp.getAllocatedContainers()) {
       containers.add(new AllocatedContainer(allocatedContainer));
     }
@@ -99,7 +135,23 @@ public class ApplicationManager {
     return containers;
   }
 
+  private void addCompletedContainers(List<ContainerStatus> completedContainersStatuses) {
+    for (ContainerStatus status : completedContainersStatuses) {
+      finishedContainersStatuses.put(status.getContainerId(), status);
+    }
+  }
+
+  public ContainerStatus waitFor(AllocatedContainer container) throws YarnRemoteException, InterruptedException {
+    ContainerId id = container.getId();
+    while (finishedContainersStatuses.containsKey(id) == false) {
+      Thread.sleep(SLEEP_TIME);
+    }
+    return finishedContainersStatuses.get(id);
+  }
+
   public void unregister(FinalApplicationStatus status) throws YarnRemoteException {
+    applicationAlive = false;
+
     FinishApplicationMasterRequest req =
         Records.newRecord(FinishApplicationMasterRequest.class);
     req.setAppAttemptId(appAttemptID);
@@ -108,7 +160,7 @@ public class ApplicationManager {
     LOG.info("Application unregistered");
   }
 
-  public void register() throws YarnRemoteException {
+  private void register() throws YarnRemoteException {
     Map<String, String> envs = System.getenv();
     String containerIdString =
         envs.get(AM_CONTAINER_ID_ENV);

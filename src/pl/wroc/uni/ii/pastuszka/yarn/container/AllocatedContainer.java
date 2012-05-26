@@ -5,6 +5,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.ContainerManager;
 import org.apache.hadoop.yarn.api.protocolrecords.StartContainerRequest;
 import org.apache.hadoop.yarn.api.records.Container;
+import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
 import org.apache.hadoop.yarn.util.Records;
 
@@ -34,6 +35,10 @@ public class AllocatedContainer {
     String containerManagerAddress = container.getNodeId().getHost() + ":"
         + container.getNodeId().getPort();
     containerManager = (ContainerManager) YarnCommon.get().connectTo(containerManagerAddress, ContainerManager.class);
+  }
+
+  public ContainerId getId() {
+    return allocatedContainer.getId();
   }
 
   public void addResource(LocalResourceDescription resource) {
