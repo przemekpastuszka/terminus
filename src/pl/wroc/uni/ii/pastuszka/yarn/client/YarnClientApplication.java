@@ -14,6 +14,7 @@ import org.apache.hadoop.yarn.exceptions.YarnRemoteException;
 import org.apache.hadoop.yarn.util.Records;
 
 import pl.wroc.uni.ii.pastuszka.yarn.common.YarnCommon;
+import pl.wroc.uni.ii.pastuszka.yarn.container.ContainerContext;
 
 public class YarnClientApplication {
   private static final Log LOG = LogFactory.getLog(YarnClientApplication.class);
@@ -23,7 +24,7 @@ public class YarnClientApplication {
 
   public YarnClientApplication(String name) {
     try {
-      applicationsManager = (ClientRMProtocol) YarnCommon.get().connectTo(RM_ADDRESS, DEFAULT_RM_ADDRESS, ClientRMProtocol.class);
+      applicationsManager = (ClientRMProtocol) YarnCommon.get().connectToUsingConf(RM_ADDRESS, DEFAULT_RM_ADDRESS, ClientRMProtocol.class);
       createApplicationSubmissionContext(name);
     } catch (YarnRemoteException e) {
       throw new RuntimeException(e);

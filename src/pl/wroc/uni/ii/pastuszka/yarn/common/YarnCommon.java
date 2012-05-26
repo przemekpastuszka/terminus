@@ -27,10 +27,14 @@ public class YarnCommon {
     return instance;
   }
 
-  public Object connectTo(String addressConf, String defaultAddress, Class<?> protocol) {
+  public Object connectToUsingConf(String addressConf, String defaultAddress, Class<?> protocol) {
     YarnConfiguration yarnConf = new YarnConfiguration(conf);
+    return connectTo(yarnConf.get(addressConf, defaultAddress), protocol);
+  }
+
+  public Object connectTo(String address, Class<?> protocol) {
     InetSocketAddress rmAddress =
-        NetUtils.createSocketAddr(yarnConf.get(addressConf, defaultAddress));
+        NetUtils.createSocketAddr(address);
     Configuration appsManagerServerConf = new Configuration(conf);
 
     return rpc.getProxy(protocol, rmAddress, appsManagerServerConf);

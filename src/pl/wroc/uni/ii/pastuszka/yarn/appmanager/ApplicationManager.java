@@ -35,6 +35,7 @@ import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 
 import pl.wroc.uni.ii.pastuszka.yarn.common.YarnCommon;
+import pl.wroc.uni.ii.pastuszka.yarn.container.AllocatedContainer;
 
 public class ApplicationManager {
   private static final int SLEEP_TIME = 1000;
@@ -47,7 +48,7 @@ public class ApplicationManager {
   private ApplicationAttemptId appAttemptID;
 
   public ApplicationManager() {
-    resourceManager = (AMRMProtocol) YarnCommon.get().connectTo(RM_SCHEDULER_ADDRESS, DEFAULT_RM_SCHEDULER_ADDRESS,
+    resourceManager = (AMRMProtocol) YarnCommon.get().connectToUsingConf(RM_SCHEDULER_ADDRESS, DEFAULT_RM_SCHEDULER_ADDRESS,
         AMRMProtocol.class);
   }
 
