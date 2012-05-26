@@ -4,8 +4,10 @@ import java.net.InetSocketAddress;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.ipc.YarnRPC;
+import org.apache.hadoop.yarn.util.Records;
 
 public class YarnCommon {
   Configuration conf = new Configuration();
@@ -32,6 +34,12 @@ public class YarnCommon {
     Configuration appsManagerServerConf = new Configuration(conf);
 
     return rpc.getProxy(protocol, rmAddress, appsManagerServerConf);
+  }
+
+  public static Resource getMemoryResource(int memory) {
+    Resource capability = Records.newRecord(Resource.class);
+    capability.setMemory(memory);
+    return capability;
   }
 
 }
