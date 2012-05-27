@@ -9,6 +9,7 @@ import static org.apache.hadoop.yarn.conf.YarnConfiguration.DEFAULT_RM_SCHEDULER
 import static org.apache.hadoop.yarn.conf.YarnConfiguration.RM_SCHEDULER_ADDRESS;
 import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnCommon.getMemoryResource;
 import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnSettings.CONTAINER_MEMORY;
+import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnSettings.TIMEOUT;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -44,13 +45,14 @@ public class ApplicationManager {
   private static final Log LOG = LogFactory.getLog(ApplicationManager.class);
 
   private int responseId = 0;
+  private int requestId = 0;
   private AMRMProtocol resourceManager;
   private ApplicationAttemptId appAttemptID;
   private Map<ContainerId, ContainerStatus> finishedContainersStatuses = new HashMap<ContainerId, ContainerStatus>();
 
   private boolean applicationAlive = true;
-  private List<ResourceRequest> resourceRequest = null;
-  private List<AllocatedContainer> containers = new LinkedList<AllocatedContainer>();
+  private Map<Integer, Integer> requests = new HashMap<Integer, Integer>();
+  private Map<Integer, List<AllocatedContainer>> containers = new HashMap<Integer, List<AllocatedContainer>>();
 
   public ApplicationManager() throws YarnRemoteException {
     resourceManager = (AMRMProtocol) YarnCommon.get().connectToUsingConf(RM_SCHEDULER_ADDRESS, DEFAULT_RM_SCHEDULER_ADDRESS,
@@ -65,14 +67,15 @@ public class ApplicationManager {
     @Override
     public void run() {
       try {
+        int currentRequestId = 0;
+
         while (applicationAlive) {
-          if (resourceRequest != null) {
-            sendResourceRequest();
-          }
-          else {
-            containers.addAll(allocateResources(EMPTY_LIST));
+          if (requests.containsKey(currentRequestId)) {
+            handleContainerRequest(currentRequestId);
+            ++currentRequestId;
           }
 
+          allocateResources(EMPTY_LIST);
           Thread.sleep(SLEEP_TIME);
         }
       } catch (Exception ex) {
@@ -82,30 +85,40 @@ public class ApplicationManager {
 
   }
 
-  private synchronized void sendResourceRequest() throws YarnRemoteException {
-    containers.addAll(allocateResources(resourceRequest));
-    resourceRequest = null;
-  }
+  private void handleContainerRequest(int currentRequestId) throws YarnRemoteException, InterruptedException {
+    int numContainers = requests.get(currentRequestId);
 
-  public List<AllocatedContainer> allocateContainers(int numContainers, int timeout) throws YarnRemoteException,
-      InterruptedException {
+    List<AllocatedContainer> currentContainers = allocateResources(createResourceRequestObject(numContainers));
     long startTime = currentTimeMillis();
-    createResourceRequest(numContainers);
-
-    while (containers.size() != numContainers) {
-      if (currentTimeMillis() - startTime > timeout) {
+    while (currentContainers.size() != numContainers) {
+      if (currentTimeMillis() - startTime > TIMEOUT) {
         LOG.warn(format("Allocated only %s containers, but wanted %s", containers.size(), numContainers));
         break;
       }
+      currentContainers.addAll(allocateResources(EMPTY_LIST));
+
       Thread.sleep(SLEEP_TIME);
     }
-
-    return containers;
+    containers.put(currentRequestId, currentContainers);
   }
 
-  protected synchronized void createResourceRequest(int numContainers) {
-    containers = new LinkedList<AllocatedContainer>();
+  public List<AllocatedContainer> allocateContainers(int numContainers) throws YarnRemoteException,
+      InterruptedException {
 
+    int currentRequestId = addRequestToTheQueue(numContainers);
+    while (containers.containsKey(currentRequestId) == false) {
+      Thread.sleep(SLEEP_TIME);
+    }
+    return containers.get(currentRequestId);
+  }
+
+  private synchronized int addRequestToTheQueue(int numContainers) {
+    int currentRequestId = requestId++;
+    requests.put(currentRequestId, numContainers);
+    return currentRequestId;
+  }
+
+  private List<ResourceRequest> createResourceRequestObject(int numContainers) {
     ResourceRequest rsrcRequest = Records.newRecord(ResourceRequest.class);
     rsrcRequest.setHostName("*");
     Priority pri = Records.newRecord(Priority.class);
@@ -113,10 +126,10 @@ public class ApplicationManager {
     rsrcRequest.setPriority(pri);
     rsrcRequest.setCapability(getMemoryResource(CONTAINER_MEMORY));
     rsrcRequest.setNumContainers(numContainers);
-    resourceRequest = asList(rsrcRequest);
+    return asList(rsrcRequest);
   }
 
-  protected List<AllocatedContainer> allocateResources(List<ResourceRequest> resourceRequests) throws YarnRemoteException {
+  private List<AllocatedContainer> allocateResources(List<ResourceRequest> resourceRequests) throws YarnRemoteException {
     AllocateRequest req = Records.newRecord(AllocateRequest.class);
     req.setResponseId(responseId++);
     req.setApplicationAttemptId(appAttemptID);

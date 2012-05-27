@@ -15,12 +15,11 @@ import pl.wroc.uni.ii.pastuszka.yarn.container.ContainerTest;
 
 public class ApplicationManagerTest {
   private static final Log LOG = LogFactory.getLog(ApplicationManagerTest.class);
-  private static final int TIMEOUT = 7000;
 
   public static void main(String[] args) throws YarnRemoteException, InterruptedException {
     ApplicationManager appManager = new ApplicationManager();
     try {
-      AllocatedContainer container = appManager.allocateContainers(1, TIMEOUT).get(0);
+      AllocatedContainer container = appManager.allocateContainers(1).get(0);
       container.addResource(LocalResourceDescription.createFromPath("spike.jar", new Path("/tmp/spike.jar")));
       container.addCommand("/opt/java/bin/java -cp spike.jar" +
           " " + ContainerTest.class.getCanonicalName());
