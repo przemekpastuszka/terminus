@@ -1,8 +1,11 @@
 package pl.wroc.uni.ii.pastuszka.yarn.common;
 
+import static pl.wroc.uni.ii.pastuszka.yarn.common.YarnSettings.CONFIGURATION_DIR;
+
 import java.net.InetSocketAddress;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
@@ -16,6 +19,8 @@ public class YarnCommon {
   private static YarnCommon instance = null;
 
   private YarnCommon() {
+    conf.addResource(new Path(CONFIGURATION_DIR + "/core-site.xml"));
+    conf.addResource(new Path(CONFIGURATION_DIR + "/hdfs-site.xml"));
     rpc = YarnRPC.create(conf);
   }
 
@@ -25,6 +30,10 @@ public class YarnCommon {
     }
 
     return instance;
+  }
+
+  public static Configuration getConfiguration() {
+    return get().conf;
   }
 
   public Object connectToUsingConf(String addressConf, String defaultAddress, Class<?> protocol) {
